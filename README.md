@@ -68,7 +68,7 @@ Please note that mcp-server-git is currently in early development. The functiona
    - Inputs:
      - `repo_path` (string): Path to Git repository
      - `branch_name` (string): Name of the new branch
-     - `start_point` (string, optional): Starting point for the new branch
+     - `base_branch` (string, optional): Starting point for the new branch
    - Returns: Confirmation of branch creation
 10. `git_checkout`
    - Switches branches
@@ -96,6 +96,55 @@ Please note that mcp-server-git is currently in early development. The functiona
      - `contains` (string, optional): The commit sha that branch should contain. Do not pass anything to this param if no commit sha is specified
      - `not_contains` (string, optional): The commit sha that branch should NOT contain. Do not pass anything to this param if no commit sha is specified
    - Returns: List of branches
+
+14. `git_cherry_pick`
+   - Cherry-pick a commit to the current branch
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `commit_sha` (string): The commit hash to cherry-pick
+     - `no_commit` (boolean, optional): If true, cherry-pick without committing (default: false)
+   - Returns: Confirmation of cherry-pick operation
+
+15. `git_list_remotes`
+   - List configured remotes
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `verbose` (boolean, optional): Show remote URLs if true (default: false)
+   - Returns: List of configured remotes
+
+16. `git_pull`
+   - Pull changes from remote repository
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `remote` (string): Name of the remote
+     - `branch` (string): Name of the branch to pull
+   - Returns: Confirmation of pull operation
+
+17. `git_push`
+   - Push changes to remote repository
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `remote` (string): Name of the remote
+     - `branch` (string): Name of the branch to push
+     - `force` (boolean, optional): Force push if true (default: false)
+   - Returns: Confirmation of push operation
+
+18. `git_fetch`
+   - Fetch changes from remote repository
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `remote` (string): Name of the remote
+     - `branch` (string, optional): Specific branch to fetch (default: all branches)
+     - `all_remotes` (boolean, optional): Fetch from all remotes if true (default: false)
+   - Returns: Confirmation of fetch operation
+
+19. `git_switch_create`
+   - Switches to a new branch or creates it from an optional base branch
+   - Inputs:
+     - `repo_path` (string): Path to Git repository
+     - `branch_name` (string): Name of the branch to create and switch to
+     - `base_branch` (string, optional): Base branch for the new branch
+   - Returns: Confirmation of branch creation and switch
 
 ## Installation
 

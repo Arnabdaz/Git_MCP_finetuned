@@ -383,7 +383,7 @@ async def serve(repository: Path | None) -> None:
             logger.error(f"{repository} is not a valid Git repository")
             return
 
-    server = Server("mcp-git")
+    server = Server("mcp-server-git")
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
