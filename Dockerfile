@@ -24,15 +24,39 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM python:3.12-slim-bookworm
 
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+# Create non-root user first
+RUN groupadd -r mcpuser && useradd -r -g mcpuser -u 1000 mcpuser
+
+# Install git, security updates, and clean up in single layer
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /app
 
-COPY --from=uv /root/.local /root/.local
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
+# Copy application files with proper ownership
+COPY --from=uv /root/.local /home/mcpuser/.local
+COPY --from=uv /app/.venv /app/.venv
+
+# Set correct ownership for application files
+RUN chown -R mcpuser:mcpuser /app /home/mcpuser
+
+# Create directory for git operations with proper permissions
+RUN mkdir -p /workspace && chown mcpuser:mcpuser /workspace
+
+# Switch to non-root user
+USER mcpuser
 
 # Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:/home/mcpuser/.local/bin:$PATH"
+ENV HOME="/home/mcpuser"
+
+# Add security labels
+LABEL security.scan="true" \
+    security.non-root="true" \
+    security.no-new-privileges="true"
 
 # when running the container, add --repository and a bind mount to the host's git repository
 ENTRYPOINT ["mcp-server-git"]
