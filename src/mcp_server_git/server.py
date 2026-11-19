@@ -2,16 +2,18 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Sequence, Optional
-from mcp.server import Server
-from mcp.server.session import ServerSession
+from typing import Optional
+from importlib.metadata import PackageNotFoundError, version as package_version
+from mcp.server import Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
 from mcp.types import (
-    ClientCapabilities,
+    CallToolRequestParams,
+    CallToolResult,
+    ContentBlock,
+    ListToolsResult,
+    PaginatedRequestParams,
     TextContent,
     Tool,
-    ListRootsResult,
-    RootsCapability,
 )
 from enum import Enum
 import git
@@ -709,9 +711,22 @@ async def serve(repository: Path | None) -> None:
             logger.error(f"{repository} is not a valid Git repository")
             return
 
-    server = Server("mcp-server-git")
+    server = build_server()
+    options = server.create_initialization_options()
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, options, raise_exceptions=True)
 
-    @server.list_tools()
+
+def _server_version() -> str:
+    try:
+        return package_version("mcp-server-git")
+    except PackageNotFoundError:
+        return ""
+
+
+def build_server() -> Server:
+    """The MCP server with every git tool registered (MCP SDK 2.x lowlevel API)."""
+
     async def list_tools() -> list[Tool]:
         return [
             Tool(
@@ -811,40 +826,6 @@ async def serve(repository: Path | None) -> None:
             ),
         ]
 
-    async def list_repos() -> Sequence[str]:
-        async def by_roots() -> Sequence[str]:
-            if not isinstance(server.request_context.session, ServerSession):
-                raise TypeError(
-                    "server.request_context.session must be a ServerSession"
-                )
-
-            if not server.request_context.session.check_client_capability(
-                ClientCapabilities(roots=RootsCapability())
-            ):
-                return []
-
-            roots_result: ListRootsResult = (
-                await server.request_context.session.list_roots()
-            )
-            logger.debug(f"Roots result: {roots_result}")
-            repo_paths = []
-            for root in roots_result.roots:
-                path = root.uri.path
-                try:
-                    git.Repo(path)
-                    repo_paths.append(str(path))
-                except git.InvalidGitRepositoryError:
-                    pass
-            return repo_paths
-
-        def by_commandline() -> Sequence[str]:
-            return [str(repository)] if repository is not None else []
-
-        cmd_repos = by_commandline()
-        root_repos = await by_roots()
-        return [*root_repos, *cmd_repos]
-
-    @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         try:
             # Validate and sanitize repo_path
@@ -996,6 +977,24 @@ async def serve(repository: Path | None) -> None:
                 TextContent(type="text", text=f"Error: {sanitize_error_message(e)}")
             ]
 
-    options = server.create_initialization_options()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, options, raise_exceptions=True)
+    # SDK 2.x: handlers are passed to the constructor and return full result types.
+    async def on_list_tools(
+        ctx: ServerRequestContext, params: PaginatedRequestParams | None
+    ) -> ListToolsResult:
+        return ListToolsResult(tools=await list_tools())
+
+    async def on_call_tool(
+        ctx: ServerRequestContext, params: CallToolRequestParams
+    ) -> CallToolResult:
+        # call_tool already turns failures into "Error: ..." text, as in SDK 1.x.
+        content: list[ContentBlock] = [
+            *await call_tool(params.name, params.arguments or {})
+        ]
+        return CallToolResult(content=content, is_error=False)
+
+    return Server(
+        "mcp-server-git",
+        version=_server_version(),
+        on_list_tools=on_list_tools,
+        on_call_tool=on_call_tool,
+    )
